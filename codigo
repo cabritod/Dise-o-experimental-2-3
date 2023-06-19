@@ -1,0 +1,94 @@
+# cargamos los datos
+df <- data.frame(Vida = c(130,155,74,180,150,188,159,126,138,110,168,160,
+                          34,40,80,75,136,122,106,115,174,120,150,139,
+                          20,70,82,58,25,70,58,45,96,104,82,60),
+                 replica = c(rep(1:4, 9)),
+                 Temperatura = c(rep(15,12),rep(70,12),rep(125,12)),
+                 Material = c(rep(1,4),rep(2,4),rep(3,4),rep(1,4),rep(2,4),rep(3,4),rep(1,4),rep(2,4),rep(3,4)))
+df$Material <- as.factor(df$Material)
+# Medidas de resumen para cada combinación de tratamiento
+aggregate(Vida ~ Material+Temperatura, data = df, FUN = function(x) c(total= sum(x), media = mean(x), desviacion = sd(x)))
+# espacio experimental
+library(ggplot2)
+# Crear el gráfico de dispersión bidimensional
+ggplot(df, aes(x = Temperatura, y = Material)) +
+  geom_point(size = 3) +
+  labs(x = "Temperatura [°F]", y = "Tipo de material", title = "Espacio Experimental")
+# con la respuesta
+# Instalar y cargar la librería 'scatterplot3d'
+library(scatterplot3d)
+# Crear el gráfico de dispersión tridimensional
+scatterplot3d(y=df$Material, x=df$Temperatura, z=df$Vida,
+              xlab = "Temperatura [°F]", ylab = "Tipo de material", zlab = "Vida [en horas]",
+              main = "Espacio Experimental con respuesta",
+              pch = 16,color="steelblue",
+              box=FALSE,
+              lab = c(4,3,3),
+              label.tick.marks = TRUE,
+              y.ticklabs = c("1","","2","","3"),
+              x.ticklabs = c("","15","","70","","","125"))
+# Gráfico de interacciones
+ggplot(df, aes(x = Material, y = Vida, color = factor(Temperatura))) +
+  geom_point(aes(shape = factor(Temperatura)), size = 3) +
+  labs(x = "Tipo de material", y = "Vida en horas", color = "Temperatura [°F]", shape = "Temperatura [°F]", title = "Gráfico de Interacciones") +
+  theme_minimal()
+# Gráfico de interacciones con líneas de error
+interaction.plot(x.factor=df$Temperatura, trace.factor=df$Material, response=df$Vida,
+                 fun = mean,
+                 ylab ="Vida en horas",
+                 xlab="Temperatura [°F]",
+                 trace.label = "Tipo de material")
+# el hecho de que las rectas no sean paralelas indican que la interacción es significativa
+# vida mas larga con la temperatura mas baja indepen del tipo de material,
+# el material tres tiene un aumento en la vida al aumentar la temp
+# el material tres mejores resultados si se quiere una perdida menor de la vida efectiva 
+# cuando aumenta la temperatura
+
+# ANOVA de dos factores
+modelo_anova <- aov(Vida ~ Material*Temperatura, data =df)
+summary(modelo_anova) # segun el anova la interaccion no es significativa
+# Prueba de Tukey para comparaciones múltiples
+library(multcomp)
+# Convertir las variables en factores
+# Realizar el ANOVA y pruebas de comparación múltiple a un valor fijo de temp para 
+# evitar obscurecer con interferencias 
+modelo_anova2 <- aov(Vida ~ Material, data =df[df$Temperatura==70,])
+mc <- glht(modelo_anova2, linfct = mcp(Material = "Tukey"))
+summary(mc)
+# con el nivel de temperatura de 70 °F la vida media es la misma para los materiales 2 y 3
+# la vida media para el material uno es significativamente menor
+# sin valor fijo
+df$Temperatura <- as.factor(df$Temperatura)
+modelo_anova3 <- aov(Vida ~ Material+Temperatura, data =df)
+mc <- glht(modelo_anova3, linfct = mcp(Material = "Tukey",Temperatura = "Tukey"))
+summary(mc)
+#### verificacion de supuestos 
+# 1)Normalidad de los residuos:
+# Obtener los residuos del modelo ANOVA
+residuos <- residuals(modelo_anova)
+# Prueba de normalidad (prueba de Shapiro-Wilk)
+shapiro.test(residuos)
+#Esta prueba evalúa si los residuos siguen una distribución normal. 
+#Si el valor p de la prueba es mayor que el nivel de significancia (0.05), 
+#podemos asumir que los residuos se distribuyen normalmente.
+plot(x=modelo_anova$fitted.values,y=rstandard(modelo_anova),
+     abline(0,0, col="red"),
+     ylab = "Residuos normalizados",
+     xlab = "Vida en horas")
+## qqplot
+qqnorm(residuos,
+       main="Gráfico Q-Q normal",
+       ylab="Cuantiles de muestra",
+       xlab="Cuantiles teóricos")
+qqline(residuos, col="red")
+#3)Evaluación de interacciones:
+######
+# estimacion de los parametros del modelo
+df$Temperatura <- as.numeric(df$Temperatura)
+df$Material <- as.numeric(df$Material)
+str(df)
+my.lm <- lm(Vida ~ Temperatura + Material + Temperatura*Material, data=df)
+summary(my.lm)
+# sin la interaccion
+my.lm1 <- lm(Vida ~ Temperatura + Material, data=df)
+summary(my.lm1)
